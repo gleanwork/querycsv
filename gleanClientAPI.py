@@ -5,11 +5,15 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Any, Union
 import gleanConstants as Constants
 
-# Configure logging
-logger = logging.getLogger('gleanClientAPI')
-
 # read in environment variables
 CONST = Constants.Constants()
+
+# Configure logging
+logger = logging.getLogger('gleanClientAPI')
+if CONST.is_verbose():
+    logger.setLevel(logging.DEBUG)
+else:
+    logger.setLevel(logging.INFO)
 
 
 @dataclass
@@ -85,7 +89,7 @@ def getAnswer(question: Dict[str, str]) -> GleanResponse:
     response = None
     answer_response = GleanResponse()
 
-    if CONST.get_debug() or CONST.is_verbose():
+    if CONST.is_verbose():
         logger.debug("Making API request:")
         logger.debug("Host: %s", apiHost)
         logger.debug("Endpoint: %s", apiEndpoint)
