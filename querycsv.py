@@ -8,8 +8,9 @@ and writes the results back to a CSV file.
 import csv
 import time
 import logging
+import statistics
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import gleanConstants as Constants
 import gleanClientAPI as clientAPI
@@ -85,23 +86,38 @@ def write_question_log(file_name: str, data: List[Dict[str, str]]) -> None:
         logger.error("Error writing to CSV file: %s", e)
 
 
-def process_questions(questions: List[Dict[str, str]], log_file: str) -> None:
+def process_questions(questions: List[Dict[str, str]], log_file: str) -> Tuple[List[float], int, int]:
     """
     Process questions through the Glean API.
 
     Args:
         questions: List of question dictionaries
         log_file: Path to the output log file
+
+    Returns:
+        Tuple containing:
+        - List of API request times in seconds
+        - Number of questions processed
+        - Number of questions skipped
     """
     processed_num = 0
+    skipped_num = 0
+    api_times = []
+
     for question in questions:
         processed_num += 1
 
         if 'answer' in question and question['answer']:
             logger.info("Skipping question %s - already has an answer: %s", question['qid'], question['question'])
+            skipped_num += 1
         else:
             logger.info("Processing question: %s", question['question'])
+            start_time = time.time()
             question_response = clientAPI.getAnswer(question)
+            end_time = time.time()
+            request_time = end_time - start_time
+            api_times.append(request_time)
+            logger.info("API request completed in %.2f seconds", request_time)
 
             # Check if there was an error
             if question_response.error:
@@ -125,6 +141,38 @@ def process_questions(questions: List[Dict[str, str]], log_file: str) -> None:
 
         time.sleep(1)  # Pause execution for 1 second
 
+    return api_times, processed_num, skipped_num
+
+
+def display_timing_summary(api_times: List[float], processed_num: int, skipped_num: int) -> None:
+    """
+    Display a summary of API request timing statistics.
+
+    Args:
+        api_times: List of API request times in seconds
+        processed_num: Total number of questions processed
+        skipped_num: Number of questions skipped
+    """
+    if not api_times:
+        logger.info("No API requests were made.")
+        return
+
+    avg_time = statistics.mean(api_times)
+    median_time = statistics.median(api_times)
+    min_time = min(api_times)
+    max_time = max(api_times)
+    
+    logger.info("\nAPI Request Timing Summary:")
+    logger.info("---------------------------")
+    logger.info("Total questions: %d", processed_num)
+    logger.info("Questions skipped: %d", skipped_num)
+    logger.info("API requests made: %d", len(api_times))
+    logger.info("Average request time: %.2f seconds", avg_time)
+    logger.info("Median request time: %.2f seconds", median_time)
+    logger.info("Minimum request time: %.2f seconds", min_time)
+    logger.info("Maximum request time: %.2f seconds", max_time)
+    logger.info("---------------------------")
+
 
 def main() -> None:
     """Main function to run the CSV processor."""
@@ -142,7 +190,10 @@ def main() -> None:
             log_file = log_file.replace('.csv', f"_{CONST.GLEAN_USER}.csv")
 
         # Process questions
-        process_questions(question_data, log_file)
+        api_times, processed_num, skipped_num = process_questions(question_data, log_file)
+        
+        # Display timing summary
+        display_timing_summary(api_times, processed_num, skipped_num)
 
         logger.info("Processing complete.")
 
